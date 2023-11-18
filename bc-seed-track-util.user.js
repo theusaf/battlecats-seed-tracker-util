@@ -5,12 +5,13 @@
 // @version      1.0.0
 // @description  Helps you find the optimal use of your tickets and cat food in BC Seed Tracker.
 // @author       theusaf
-// @match        *://*/*
+// @match        https://bc.godfat.org/
+// @icon         https://bc.godfat.org/asset/image/treasure.png
 // @license      MIT
 // @grant        none
 // @noframes
 // ==/UserScript==
-{
+(() => {
     class TrackGraph {
         nodes = new Map();
         addNode(node, name) {
@@ -415,12 +416,12 @@
                     distance.addCat(cat);
                 }
                 // heuristic for finding wanted cats
-                function handleNewWanted(catName) {
+                const handleNewWanted = (catName) => {
                     if (cats.includes(catName) && !vertexDistance.hasCat(catName)) {
                         alt -= foundCatValue;
                         distance.virtualFoodUsed = alt;
                     }
-                }
+                };
                 // simulate pull
                 switch (distanceType) {
                     case "normal": {
@@ -464,8 +465,8 @@
     }
     function* subsets(array, offset = 0) {
         while (offset < array.length) {
-            let first = array[offset++];
-            for (let subset of subsets(array, offset)) {
+            const first = array[offset++];
+            for (const subset of subsets(array, offset)) {
                 subset.push(first);
                 yield subset;
             }
@@ -488,12 +489,209 @@
         }
         return results;
     }
-    const { leftTrack, rightTrack } = parseTable(), graph = generateGraph(leftTrack, rightTrack), results = multiSearch(graph, graph.getNode("1A"), {
-        cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
-        tickets: 69,
-        catFood: 4000,
-        hasDiscount: true,
-        // foundCatValue: 0,
+    function htmlEntities(str) {
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+    const ui = document.createElement("template");
+    ui.innerHTML = `
+    <style>
+      #bstu-main {
+        position: fixed;
+        top: 0;
+        right: 0;
+        background: grey;
+        padding: 0.5rem;
+        max-width: 25rem;
+        max-height: 100vh;
+        overflow: auto;
+      }
+      .bstu-choice {
+        background: #eee;
+        border-radius: 0.5rem;
+        padding: 0.25rem;
+        margin: 0.25rem;
+      }
+      #bstu-choices {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      .bstu-result {
+        background: darkgray;
+        border-radius: 0.5rem;
+        margin: 0.25rem;
+        padding: 0.25rem;
+      }
+      .bstu-result-cats {
+        font-weight: bold;
+      }
+      .bstu-result-distance-food {
+        border-radius: 0.5rem;
+        background: red;
+        color: white;
+        padding: 0.1rem;
+      }
+      .bstu-result-distance-tickets {
+        border-radius: 0.5rem;
+        background: gold;
+        padding: 0.1rem;
+      }
+    </style>
+    <div id="bstu-main">
+      <details>
+        <summary>BC Seed Tracker Util</summary>
+        <div>
+          <div>
+            <div>
+              <label for="bstu-discount">Has Discount</label>
+              <input type="checkbox" id="bstu-discount" />
+            </div>
+            <div>
+              <label for="bstu-tickets">Tickets</label>
+              <input type="number" id="bstu-tickets" />
+            </div>
+            <div>
+              <label for="bstu-cat-food">Cat Food</label>
+              <input type="number" id="bstu-cat-food" />
+            </div>
+          </div>
+          <select id="bstu-selector"></select>
+          <button id="bstu-start-button">Calculate Paths</button>
+        </div>
+        <div id="bstu-choices">
+        </div>
+        <hr />
+        <div id="bstu-results">
+        </div>
+      </details>
+    </div>
+  `;
+    document.body.appendChild(ui.content.cloneNode(true));
+    setTimeout(() => {
+        // copy available cats
+        const selector = document.querySelector("#bstu-selector"), choicesArea = document.querySelector("#bstu-choices"), resultsArea = document.querySelector("#bstu-results"), startButton = document.querySelector("#bstu-start-button"), discountCheckbox = document.querySelector("#bstu-discount"), ticketsInput = document.querySelector("#bstu-tickets"), catFoodInput = document.querySelector("#bstu-cat-food"), providedCatSelector = document.querySelector("#find_select"), options = providedCatSelector.cloneNode(true)
+            .children;
+        selector.append(...options);
+        selector.value = "";
+        const choices = new Set();
+        function addChoice(cat) {
+            if (choices.has(cat))
+                return;
+            choices.add(cat);
+            const choice = document.createElement("span");
+            choice.innerHTML = `
+        <span class="bstu-choice-name">${cat}</span>
+        <span class="bstu-choice-remove">x</span>
+      `;
+            choice.className = "bstu-choice";
+            const node = choice.cloneNode(true);
+            choicesArea.append(node);
+            node
+                .querySelector(".bstu-choice-remove")
+                .addEventListener("click", () => {
+                choices.delete(cat);
+                node.remove();
+            });
+        }
+        function saveToLocalStore() {
+            localStorage.setItem("bstu-data", JSON.stringify({
+                cats: [...choices],
+                tickets: ticketsInput.value,
+                catFood: catFoodInput.value,
+                hasDiscount: discountCheckbox.checked,
+            }));
+        }
+        function loadFromLocalStore() {
+            const data = JSON.parse(localStorage.getItem("bstu-data") ?? "{}");
+            choices.clear();
+            for (const cat of data.cats ?? []) {
+                if (![...selector.options].find((option) => option.textContent === cat)) {
+                    continue;
+                }
+                addChoice(cat);
+            }
+            ticketsInput.value = data.tickets ?? "";
+            catFoodInput.value = data.catFood ?? "";
+            discountCheckbox.checked = data.hasDiscount ?? false;
+        }
+        loadFromLocalStore();
+        selector.addEventListener("change", () => {
+            if (!selector.value)
+                return;
+            addChoice(selector.options[selector.selectedIndex].textContent);
+            setTimeout(() => (selector.value = ""));
+        });
+        startButton.addEventListener("click", () => {
+            const { leftTrack, rightTrack } = parseTable(), graph = generateGraph(leftTrack, rightTrack), results = multiSearch(graph, graph.getNode("1A"), {
+                cats: [...choices],
+                tickets: ticketsInput.valueAsNumber,
+                catFood: catFoodInput.valueAsNumber || Infinity,
+                hasDiscount: discountCheckbox.checked,
+                foundCatValue: 0,
+            });
+            saveToLocalStore();
+            console.log(results);
+            // generate output
+            for (const [catList, result] of [...results.entries()].sort(([a], [b]) => b.length - a.length)) {
+                const resultDiv = document.createElement("div");
+                resultDiv.className = "bstu-result";
+                if (result) {
+                    const { path, finalDistance } = result, simplifiedPath = [];
+                    let currentPullType = null, currentPullCount = 0;
+                    for (let i = 1; i < path.length; i++) {
+                        const prev = path[i - 1], current = path[i], type = prev.neighbors.get(current);
+                        if (type === currentPullType) {
+                            currentPullCount++;
+                        }
+                        else {
+                            if (currentPullType) {
+                                simplifiedPath.push({
+                                    type: currentPullType === "normal" ? "normal" : "guaranteed",
+                                    count: currentPullCount,
+                                });
+                            }
+                            currentPullType = type;
+                            currentPullCount = 1;
+                        }
+                    }
+                    if (currentPullType) {
+                        simplifiedPath.push({
+                            type: currentPullType === "normal" ? "normal" : "guaranteed",
+                            count: currentPullCount,
+                        });
+                    }
+                    resultDiv.innerHTML = `
+            <div>
+              <span class="bstu-result-cats">${catList.join(", ")}</span>
+              <span class="bstu-result-distance">
+                <span class="bstu-result-distance-food">${finalDistance.catFoodLeft}</span>
+                <span class="bstu-result-distance-tickets">${finalDistance.ticketsLeft}</span>
+              </span>
+            </div>
+            <div>
+              <span class="bstu-result-path" data-path="${htmlEntities(path.map((node) => `${node.catName} (${node.name})`).join(" > "))}">
+              ${simplifiedPath
+                        .map((pull) => `${pull.count} ${pull.type === "normal" ? "pull" : "guaranteed pull"}${pull.count > 1 ? "s" : ""}`)
+                        .join(", ")}
+              </span>
+            </div>
+          `;
+                }
+                else {
+                    resultDiv.innerHTML = `
+            <div>
+              <span class="bstu-result-cats">${catList.join(", ")}</span>
+            </div>
+            <div>
+              <span class="bstu-result-path">No path found</span>
+            </div>
+          `;
+                }
+                resultsArea.append(resultDiv);
+            }
+        });
     });
-    window.results = results;
-}
+})();

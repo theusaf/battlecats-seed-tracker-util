@@ -10,5 +10,4 @@ parserOptions:
   ecmaVersion: latest
 plugins:
   - "@typescript-eslint"
-rules:
-  no-inner-declarations: off
+rules: {}
