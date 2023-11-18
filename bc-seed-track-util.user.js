@@ -207,7 +207,7 @@
                 if (guaranteedPullNext) {
                     const guaranteedPullLinkName = guaranteedPullNext.leadsToName, guaranteedLink = graph.getNode(guaranteedPullLinkName), nameNumber = +guaranteedPullLinkName.match(/(\d+)/)[1];
                     guaranteedPullNext.nextNormalPullNode = guaranteedLink ?? null;
-                    node.neighbors.set(guaranteedPullNext, nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15");
+                    node.neighbors.set(guaranteedPullNext, nameNumber - (i + 1) <= 12 ? "guaranteed11" : "guaranteed15");
                 }
             }
         }
@@ -240,7 +240,7 @@
                 if (guaranteedPullNext) {
                     const guaranteedPullLinkName = guaranteedPullNext.leadsToName, guaranteedLink = graph.getNode(guaranteedPullLinkName);
                     const nameNumber = +guaranteedPullLinkName.match(/(\d+)/)[1];
-                    node.neighbors.set(guaranteedLink, nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15");
+                    node.neighbors.set(guaranteedLink, nameNumber - (i + 1) <= 12 ? "guaranteed11" : "guaranteed15");
                     graph.deleteNode(guaranteedPullName);
                 }
             }
@@ -352,13 +352,36 @@
                     }
                 }
                 if (!found) {
+                    // adjust distance output
+                    const distance = distances.get(vertex), path = getPath(previous, start, vertex);
+                    if (hasDiscount) {
+                        if (distance.ticketsLeft > 0) {
+                            distance.catFoodLeft -=
+                                SINGLE_PULL_COST - SINGLE_PULL_COST_DISCOUNT;
+                        }
+                        // scan for any guaranteed pulls
+                        let found = false;
+                        for (let i = 1; i < path.length; i++) {
+                            const node = path[i], prev = path[i - 1];
+                            if (prev.neighbors.get(node) === "guaranteed11") {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            distance.catFoodLeft -=
+                                ELEVEN_PULL_COST - ELEVEN_PULL_COST_DISCOUNT;
+                        }
+                    }
                     catLengthSets.push({
                         cats: new Set(catsFound),
-                        path: getPath(previous, start, vertex),
+                        path,
+                        finalDistance: distance,
                     });
                 }
-                if (catLengthSets.length === cats.length) {
+                if (catSetsFound.size === cats.length) {
                     // we found all cats!
+                    console.log("found all cats!");
                     break;
                 }
             }
@@ -367,7 +390,18 @@
                     continue;
                 const cost = getCost(distanceType), vertexDistance = distances.get(vertex);
                 let tickets = vertexDistance.ticketsLeft, catFood = vertexDistance.catFoodLeft;
-                if (distanceType === "normal" && tickets > 0) {
+                // handle initial pull (including start)
+                if (distanceType === "normal" && vertex.name === "1A") {
+                    if (tickets > 0)
+                        tickets--;
+                    else
+                        catFood -= cost;
+                    if (tickets > 0)
+                        tickets--;
+                    else
+                        catFood -= cost;
+                }
+                else if (distanceType === "normal" && tickets > 0) {
                     tickets--;
                 }
                 else {
@@ -428,7 +462,33 @@
         }
         return catSetsFound;
     }
-    const { leftTrack, rightTrack } = parseTable(), graph = generateGraph(leftTrack, rightTrack), results = graphSearch(graph, graph.getNode("1A"), {
+    function* subsets(array, offset = 0) {
+        while (offset < array.length) {
+            let first = array[offset++];
+            for (let subset of subsets(array, offset)) {
+                subset.push(first);
+                yield subset;
+            }
+        }
+        yield [];
+    }
+    function multiSearch(graph, start, { cats, tickets, catFood, hasDiscount, foundCatValue = ELEVEN_PULL_COST, }) {
+        const results = new Map();
+        for (const subset of subsets(cats)) {
+            if (subset.length === 0)
+                continue;
+            const result = graphSearch(graph, start, {
+                cats: subset,
+                tickets,
+                catFood,
+                hasDiscount,
+                foundCatValue,
+            });
+            results.set(subset, result.get(subset.length)?.[0] ?? null);
+        }
+        return results;
+    }
+    const { leftTrack, rightTrack } = parseTable(), graph = generateGraph(leftTrack, rightTrack), results = multiSearch(graph, graph.getNode("1A"), {
         cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
         tickets: 69,
         catFood: 4000,

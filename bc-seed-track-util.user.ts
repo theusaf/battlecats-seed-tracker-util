@@ -266,7 +266,7 @@
           guaranteedPullNext.nextNormalPullNode = guaranteedLink ?? null;
           node!.neighbors.set(
             guaranteedPullNext!,
-            nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15"
+            nameNumber - (i + 1) <= 12 ? "guaranteed11" : "guaranteed15"
           );
         }
       }
@@ -305,7 +305,7 @@
           const nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
           node!.neighbors.set(
             guaranteedLink!,
-            nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15"
+            nameNumber - (i + 1) <= 12 ? "guaranteed11" : "guaranteed15"
           );
           graph.deleteNode(guaranteedPullName);
         }
@@ -392,6 +392,14 @@
     return path;
   }
 
+  interface SearchArgs {
+    cats: string[];
+    tickets: number;
+    catFood: number;
+    hasDiscount: boolean;
+    foundCatValue?: number;
+  }
+
   // a modified version of Dijkstra's algorithm
   // somewhat like a star search
   function graphSearch(
@@ -403,13 +411,7 @@
       catFood,
       hasDiscount,
       foundCatValue = ELEVEN_PULL_COST,
-    }: {
-      cats: string[];
-      tickets: number;
-      catFood: number;
-      hasDiscount: boolean;
-      foundCatValue?: number;
-    }
+    }: SearchArgs
   ) {
     if (cats.length === 0) {
       throw new Error("There must be at least one cat to search for.");
@@ -433,6 +435,7 @@
       {
         cats: Set<string>;
         path: TrackGraphNode[];
+        finalDistance: Distance;
       }[]
     > = new Map();
     while (queue.size > 0) {
@@ -459,13 +462,38 @@
           }
         }
         if (!found) {
+          // adjust distance output
+          const distance = distances.get(vertex)!,
+            path = getPath(previous, start, vertex);
+          if (hasDiscount) {
+            if (distance.ticketsLeft > 0) {
+              distance.catFoodLeft -=
+                SINGLE_PULL_COST - SINGLE_PULL_COST_DISCOUNT;
+            }
+            // scan for any guaranteed pulls
+            let found = false;
+            for (let i = 1; i < path.length; i++) {
+              const node = path[i],
+                prev = path[i - 1];
+              if (prev.neighbors.get(node) === "guaranteed11") {
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              distance.catFoodLeft -=
+                ELEVEN_PULL_COST - ELEVEN_PULL_COST_DISCOUNT;
+            }
+          }
           catLengthSets.push({
             cats: new Set(catsFound),
-            path: getPath(previous, start, vertex),
+            path,
+            finalDistance: distance,
           });
         }
-        if (catLengthSets.length === cats.length) {
+        if (catSetsFound.size === cats.length) {
           // we found all cats!
+          console.log("found all cats!");
           break;
         }
       }
@@ -476,7 +504,13 @@
           vertexDistance = distances.get(vertex)!;
         let tickets = vertexDistance.ticketsLeft,
           catFood = vertexDistance.catFoodLeft;
-        if (distanceType === "normal" && tickets > 0) {
+        // handle initial pull (including start)
+        if (distanceType === "normal" && vertex.name === "1A") {
+          if (tickets > 0) tickets--;
+          else catFood -= cost;
+          if (tickets > 0) tickets--;
+          else catFood -= cost;
+        } else if (distanceType === "normal" && tickets > 0) {
           tickets--;
         } else {
           catFood -= cost;
@@ -539,14 +573,58 @@
     return catSetsFound;
   }
 
+  function* subsets<T>(array: T[], offset = 0): Generator<T[]> {
+    while (offset < array.length) {
+      let first = array[offset++];
+      for (let subset of subsets(array, offset)) {
+        subset.push(first);
+        yield subset;
+      }
+    }
+    yield [];
+  }
+
+  function multiSearch(
+    graph: TrackGraph,
+    start: TrackGraphNode,
+    {
+      cats,
+      tickets,
+      catFood,
+      hasDiscount,
+      foundCatValue = ELEVEN_PULL_COST,
+    }: SearchArgs
+  ) {
+    const results = new Map<
+      string[],
+      {
+        cats: Set<string>;
+        path: TrackGraphNode[];
+        finalDistance: Distance;
+      } | null
+    >();
+    for (const subset of subsets(cats)) {
+      if (subset.length === 0) continue;
+      const result = graphSearch(graph, start, {
+        cats: subset,
+        tickets,
+        catFood,
+        hasDiscount,
+        foundCatValue,
+      });
+      results.set(subset, result.get(subset.length)?.[0] ?? null);
+    }
+    return results;
+  }
+
   const { leftTrack, rightTrack } = parseTable(),
     graph = generateGraph(leftTrack, rightTrack),
-    results = graphSearch(graph, graph.getNode("1A")!, {
-    cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
-    tickets: 69,
-    catFood: 4000,
-    hasDiscount: true,
-    // foundCatValue: 0,
-  });
+    results = multiSearch(graph, graph.getNode("1A")!, {
+      cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
+      tickets: 69,
+      catFood: 4000,
+      hasDiscount: true,
+      foundCatValue: 0,
+    });
   (window as any).results = results;
 }
