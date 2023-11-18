@@ -19,7 +19,7 @@
     }
 
     getNode(name: string) {
-      return this.nodes.get(name)!;
+      return this.nodes.get(name);
     }
 
     deleteNode(name: string) {
@@ -238,12 +238,12 @@
     return { leftTrack, rightTrack };
   }
 
-  function generateGraph(leftTrack: Track, rightTrack: Track) {
+  function generateGraph(leftTrack: Track[], rightTrack: Track[]) {
     const graph = new TrackGraph();
 
     // nodify all items
     for (let i = 0; i < leftTrack.length; i++) {
-      const [normal, guaranteed] = leftTrack;
+      const [normal, guaranteed] = leftTrack[i];
       for (let j = 0; j < normal.length; j++) {
         const node = new TrackGraphNode(normal[j]!);
         graph.addNode(node, `${i + 1}A${j === 0 ? "" : "R"}`);
@@ -254,7 +254,7 @@
       }
     }
     for (let i = 0; i < rightTrack.length; i++) {
-      const [normal, guaranteed] = rightTrack;
+      const [normal, guaranteed] = rightTrack[i];
       for (let j = 0; j < normal.length; j++) {
         const node = new TrackGraphNode(normal[j]!);
         graph.addNode(node, `${i + 1}B${j === 0 ? "" : "R"}`);
@@ -267,12 +267,47 @@
 
     // connect all items
     for (let i = 0; i < leftTrack.length; i++) {
-      const [normal, guaranteed] = leftTrack;
+      const [normal] = leftTrack[i];
       for (let j = 0; j < normal.length; j++) {
         const node = graph.getNode(`${i + 1}A${j === 0 ? "" : "R"}`);
+        const nodeCatName = node!.catName;
+
+        // normal pull
+        const normalPullNextName = node!.leadsToName ?? `${i + 2}A`;
+        const normalPullNext = graph.getNode(normalPullNextName);
+        if (normalPullNext) {
+          const normalPullNextCatName = normalPullNext.catName;
+          if (normalPullNextCatName === nodeCatName) {
+            const nextName = `${i + 2}AR`;
+            const next = graph.getNode(nextName);
+            if (next) {
+              node!.neighbors.set(next, "normal");
+              node!.extraPullNode = next;
+            }
+          }
+        }
+
+        // guaranteed pull
+        const guaranteedPullNextName =
+          node!.leadsToName ?? `${i + 1}A${j === 0 ? "" : "R"}G`;
+        const guaranteedPullNext = graph.getNode(guaranteedPullNextName);
+        if (guaranteedPullNext) {
+          const guaranteedPullLinkName = guaranteedPullNext.leadsToName,
+            guaranteedLink = graph.getNode(guaranteedPullLinkName!);
+
+          const nameNumber = +guaranteedPullNextName.match(/(\d+)/)![1];
+          node!.neighbors.set(
+            guaranteedLink!,
+            nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15"
+          );
+          graph.deleteNode(guaranteedPullNextName);
+        }
       }
     }
+    return graph;
   }
 
-  console.log(parseTable());
+  const { leftTrack, rightTrack } = parseTable();
+  const graph = generateGraph(leftTrack, rightTrack);
+  const results = djikstraSearch(graph, graph.getNode("1A")!);
 }
