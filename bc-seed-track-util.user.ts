@@ -97,8 +97,8 @@
       leftTrackEndLength = 0,
       rightTrackStartIndex = 0,
       rightTrackEndLength = 0,
-      rowsizes: number[] = ([] as number[]).fill(0, 0, altNumber + 1),
       columnSkip = 0;
+    const rowsizes: number[] = ([] as number[]).fill(0, 0, altNumber + 1);
     for (let r = 0; r < rows.length; r++) {
       if (
         leftTrackStartIndex - r + leftTrackEndLength < 0 ||
@@ -207,26 +207,26 @@
     for (let i = 0; i < leftTrack.length; i++) {
       const [normal, guaranteed] = leftTrack[i];
       for (let j = 0; j < normal.length; j++) {
-        const name = `${i + 1}A${j === 0 ? "" : "R"}`;
-        const node = new TrackGraphNode(normal[j]!, name);
+        const name = `${i + 1}A${j === 0 ? "" : "R"}`,
+          node = new TrackGraphNode(normal[j]!, name);
         graph.addNode(node, name);
       }
       for (let j = 0; j < guaranteed.length; j++) {
-        const name = `${i + 1}A${j === 0 ? "" : "R"}G`;
-        const node = new TrackGraphNode(guaranteed[j]!, name);
+        const name = `${i + 1}A${j === 0 ? "" : "R"}G`,
+          node = new TrackGraphNode(guaranteed[j]!, name);
         graph.addNode(node, name);
       }
     }
     for (let i = 0; i < rightTrack.length; i++) {
       const [normal, guaranteed] = rightTrack[i];
       for (let j = 0; j < normal.length; j++) {
-        const name = `${i + 1}B${j === 0 ? "" : "R"}`;
-        const node = new TrackGraphNode(normal[j]!, name);
+        const name = `${i + 1}B${j === 0 ? "" : "R"}`,
+          node = new TrackGraphNode(normal[j]!, name);
         graph.addNode(node, name);
       }
       for (let j = 0; j < guaranteed.length; j++) {
-        const name = `${i + 1}B${j === 0 ? "" : "R"}G`;
-        const node = new TrackGraphNode(guaranteed[j]!, name);
+        const name = `${i + 1}B${j === 0 ? "" : "R"}G`,
+          node = new TrackGraphNode(guaranteed[j]!, name);
         graph.addNode(node, name);
       }
     }
@@ -235,17 +235,17 @@
     for (let i = 0; i < leftTrack.length; i++) {
       const [normal] = leftTrack[i];
       for (let j = 0; j < normal.length; j++) {
-        const node = graph.getNode(`${i + 1}A${j === 0 ? "" : "R"}`);
-        const nodeCatName = node!.catName;
+        const node = graph.getNode(`${i + 1}A${j === 0 ? "" : "R"}`),
+          nodeCatName = node!.catName;
 
         // normal pull
-        const normalPullNextName = node!.leadsToName ?? `${i + 2}A`;
-        const normalPullNext = graph.getNode(normalPullNextName);
+        const normalPullNextName = node!.leadsToName ?? `${i + 2}A`,
+          normalPullNext = graph.getNode(normalPullNextName);
         if (normalPullNext) {
           const normalPullNextCatName = normalPullNext.catName;
           if (normalPullNextCatName === nodeCatName) {
-            const nextName = `${i + 2}AR`;
-            const next = graph.getNode(nextName);
+            const nextName = `${i + 2}AR`,
+              next = graph.getNode(nextName);
             if (next) {
               node!.neighbors.set(next, "normal");
               node!.nextNormalPullNode = next;
@@ -257,18 +257,17 @@
         }
 
         // guaranteed pull
-        const guaranteedPullName = `${node!.name}G`;
-        const guaranteedPullNext = graph.getNode(guaranteedPullName);
+        const guaranteedPullName = `${node!.name}G`,
+          guaranteedPullNext = graph.getNode(guaranteedPullName);
         if (guaranteedPullNext) {
           const guaranteedPullLinkName = guaranteedPullNext.leadsToName,
-            guaranteedLink = graph.getNode(guaranteedPullLinkName!);
-
-          const nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
+            guaranteedLink = graph.getNode(guaranteedPullLinkName!),
+            nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
+          guaranteedPullNext.nextNormalPullNode = guaranteedLink ?? null;
           node!.neighbors.set(
-            guaranteedLink!,
+            guaranteedPullNext!,
             nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15"
           );
-          graph.deleteNode(guaranteedPullName);
         }
       }
     }
@@ -493,7 +492,7 @@
 
         // heuristic for finding wanted cats
         function handleNewWanted(catName: string) {
-          if (cats.includes(catName) && !distance.hasCat(catName)) {
+          if (cats.includes(catName) && !vertexDistance.hasCat(catName)) {
             alt -= foundCatValue;
             distance.virtualFoodUsed = alt;
           }
@@ -502,28 +501,28 @@
         // simulate pull
         switch (distanceType) {
           case "normal": {
-            handleNewWanted(neighbor.catName);
             distance.addCat(neighbor.catName);
+            handleNewWanted(neighbor.catName);
             break;
           }
           case "guaranteed11": {
             distance.addCat(neighbor.catName);
-            let start = vertex.nextNormalPullNode;
+            let start: TrackGraphNode | null = vertex;
             for (let i = 0; i < 10; i++) {
               if (!start) break;
-              handleNewWanted(start!.catName);
               distance.addCat(start!.catName);
+              handleNewWanted(start!.catName);
               start = start.nextNormalPullNode;
             }
             break;
           }
           case "guaranteed15": {
             distance.addCat(neighbor.catName);
-            let start = vertex.nextNormalPullNode;
+            let start: TrackGraphNode | null = vertex;
             for (let i = 0; i < 14; i++) {
               if (!start) break;
-              handleNewWanted(start!.catName);
               distance.addCat(start!.catName);
+              handleNewWanted(start!.catName);
               start = start.nextNormalPullNode;
             }
             break;
@@ -540,13 +539,14 @@
     return catSetsFound;
   }
 
-  const { leftTrack, rightTrack } = parseTable();
-  const graph = generateGraph(leftTrack, rightTrack);
-  const results = graphSearch(graph, graph.getNode("1A")!, {
+  const { leftTrack, rightTrack } = parseTable(),
+    graph = generateGraph(leftTrack, rightTrack),
+    results = graphSearch(graph, graph.getNode("1A")!, {
     cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
     tickets: 69,
     catFood: 4000,
     hasDiscount: true,
+    // foundCatValue: 0,
   });
   (window as any).results = results;
 }
