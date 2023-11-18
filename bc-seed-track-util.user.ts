@@ -33,9 +33,11 @@
     neighbors: Map<TrackGraphNode, ConnectionType> = new Map();
     extraPullNode: TrackGraphNode | null = null;
     element: HTMLElement;
+    name: string;
 
-    constructor(element: HTMLElement) {
+    constructor(element: HTMLElement, name: string) {
       this.element = element;
+      this.name = name;
     }
 
     get catName(): string {
@@ -43,10 +45,18 @@
     }
 
     get leadsToName(): string | null {
-      const outputNode = this.element.childNodes[3];
-      if (outputNode?.textContent!.trim()) {
-        return outputNode.textContent!.trim().match(/(\d+[ABR]+)/)![1];
-      } else {
+      try {
+        const outputNodeRight = this.element.childNodes[3],
+          outputNodeLeft = this.element.childNodes[0];
+        if (outputNodeRight?.textContent!.trim()) {
+          return outputNodeRight.textContent!.trim().match(/(\d+[ABR]+)/)![1];
+        } else if (outputNodeLeft?.textContent!.trim()) {
+          return outputNodeLeft.textContent!.trim().match(/(\d+[ABR]+)/)![1];
+        } else {
+          return null;
+        }
+      } catch (e) {
+        // probably a <?>
         return null;
       }
     }
@@ -96,8 +106,11 @@
 
     while (queue.size > 0) {
       const vertex = getSmallestVertex(distances, queue);
+      // probably out of "resources"
+      if (!vertex) break;
       queue.delete(vertex!);
     }
+    console.log("done");
   }
 
   type Track = [[HTMLElement, HTMLElement?], [HTMLElement?, HTMLElement?]];
@@ -245,23 +258,27 @@
     for (let i = 0; i < leftTrack.length; i++) {
       const [normal, guaranteed] = leftTrack[i];
       for (let j = 0; j < normal.length; j++) {
-        const node = new TrackGraphNode(normal[j]!);
-        graph.addNode(node, `${i + 1}A${j === 0 ? "" : "R"}`);
+        const name = `${i + 1}A${j === 0 ? "" : "R"}`;
+        const node = new TrackGraphNode(normal[j]!, name);
+        graph.addNode(node, name);
       }
       for (let j = 0; j < guaranteed.length; j++) {
-        const node = new TrackGraphNode(guaranteed[j]!);
-        graph.addNode(node, `${i + 1}A${j === 0 ? "" : "R"}G`);
+        const name = `${i + 1}A${j === 0 ? "" : "R"}G`;
+        const node = new TrackGraphNode(guaranteed[j]!, name);
+        graph.addNode(node, name);
       }
     }
     for (let i = 0; i < rightTrack.length; i++) {
       const [normal, guaranteed] = rightTrack[i];
       for (let j = 0; j < normal.length; j++) {
-        const node = new TrackGraphNode(normal[j]!);
-        graph.addNode(node, `${i + 1}B${j === 0 ? "" : "R"}`);
+        const name = `${i + 1}B${j === 0 ? "" : "R"}`;
+        const node = new TrackGraphNode(normal[j]!, name);
+        graph.addNode(node, name);
       }
       for (let j = 0; j < guaranteed.length; j++) {
-        const node = new TrackGraphNode(guaranteed[j]!);
-        graph.addNode(node, `${i + 1}B${j === 0 ? "" : "R"}G`);
+        const name = `${i + 1}B${j === 0 ? "" : "R"}G`;
+        const node = new TrackGraphNode(guaranteed[j]!, name);
+        graph.addNode(node, name);
       }
     }
 
@@ -284,23 +301,65 @@
               node!.neighbors.set(next, "normal");
               node!.extraPullNode = next;
             }
+          } else {
+            node!.neighbors.set(normalPullNext, "normal");
+            node!.extraPullNode = normalPullNext;
           }
         }
 
         // guaranteed pull
-        const guaranteedPullNextName =
-          node!.leadsToName ?? `${i + 1}A${j === 0 ? "" : "R"}G`;
-        const guaranteedPullNext = graph.getNode(guaranteedPullNextName);
+        const guaranteedPullName = `${node!.name}G`;
+        const guaranteedPullNext = graph.getNode(guaranteedPullName);
         if (guaranteedPullNext) {
           const guaranteedPullLinkName = guaranteedPullNext.leadsToName,
             guaranteedLink = graph.getNode(guaranteedPullLinkName!);
 
-          const nameNumber = +guaranteedPullNextName.match(/(\d+)/)![1];
+          const nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
           node!.neighbors.set(
             guaranteedLink!,
             nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15"
           );
-          graph.deleteNode(guaranteedPullNextName);
+          graph.deleteNode(guaranteedPullName);
+        }
+      }
+    }
+    for (let i = 0; i < rightTrack.length; i++) {
+      const [normal] = rightTrack[i];
+      for (let j = 0; j < normal.length; j++) {
+        const node = graph.getNode(`${i + 1}B${j === 0 ? "" : "R"}`);
+        const nodeCatName = node!.catName;
+
+        // normal pull
+        const normalPullNextName = node!.leadsToName ?? `${i + 2}B`;
+        const normalPullNext = graph.getNode(normalPullNextName);
+        if (normalPullNext) {
+          const normalPullNextCatName = normalPullNext.catName;
+          if (normalPullNextCatName === nodeCatName) {
+            const nextName = `${i + 2}BR`;
+            const next = graph.getNode(nextName);
+            if (next) {
+              node!.neighbors.set(next, "normal");
+              node!.extraPullNode = next;
+            }
+          } else {
+            node!.neighbors.set(normalPullNext, "normal");
+            node!.extraPullNode = normalPullNext;
+          }
+        }
+
+        // guaranteed pull
+        const guaranteedPullName = `${node!.name}G`;
+        const guaranteedPullNext = graph.getNode(guaranteedPullName);
+        if (guaranteedPullNext) {
+          const guaranteedPullLinkName = guaranteedPullNext.leadsToName,
+            guaranteedLink = graph.getNode(guaranteedPullLinkName!);
+
+          const nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
+          node!.neighbors.set(
+            guaranteedLink!,
+            nameNumber - (i + 1) === 11 ? "guaranteed11" : "guaranteed15"
+          );
+          graph.deleteNode(guaranteedPullName);
         }
       }
     }
