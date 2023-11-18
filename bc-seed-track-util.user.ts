@@ -62,57 +62,6 @@
     }
   }
 
-  const SINGLE_PULL_COST = 150;
-  const ELEVEN_PULL_COST = 1500;
-  const FIFTEEN_PULL_COST = 2100;
-
-  function getCost(type: ConnectionType) {
-    switch (type) {
-      case "normal":
-        return SINGLE_PULL_COST;
-      case "guaranteed11":
-        return ELEVEN_PULL_COST;
-      case "guaranteed15":
-        return FIFTEEN_PULL_COST;
-    }
-  }
-
-  function getSmallestVertex(
-    distances: Map<TrackGraphNode, number>,
-    queue: Set<TrackGraphNode>
-  ) {
-    let smallest: TrackGraphNode | null = null;
-    let smallestDistance = Infinity;
-    for (const node of queue) {
-      const distance = distances.get(node)!;
-      if (distance < smallestDistance) {
-        smallest = node;
-        smallestDistance = distance;
-      }
-    }
-    return smallest;
-  }
-
-  function djikstraSearch(graph: TrackGraph, start: TrackGraphNode) {
-    const distances = new Map<TrackGraphNode, number>();
-    const previous = new Map<TrackGraphNode, TrackGraphNode | null>();
-    const queue = new Set<TrackGraphNode>();
-    for (const node of graph.nodes.values()) {
-      distances.set(node, Infinity);
-      previous.set(node, null);
-      queue.add(node);
-    }
-    distances.set(start, 0);
-
-    while (queue.size > 0) {
-      const vertex = getSmallestVertex(distances, queue);
-      // probably out of "resources"
-      if (!vertex) break;
-      queue.delete(vertex!);
-    }
-    console.log("done");
-  }
-
   type Track = [[HTMLElement, HTMLElement?], [HTMLElement?, HTMLElement?]];
 
   // initial processing (convert DOM into arrays)
@@ -364,6 +313,72 @@
       }
     }
     return graph;
+  }
+
+  class Distance {
+    ticketsLeft: number;
+    catFoodLeft: number;
+
+    virtualFoodUsed: number;
+
+    constructor(ticketsLeft: number, catFoodLeft: number, initialValue = 0) {
+      this.ticketsLeft = ticketsLeft;
+      this.catFoodLeft = catFoodLeft;
+      this.virtualFoodUsed = initialValue;
+    }
+  }
+
+  const SINGLE_PULL_COST = 150;
+  const SINGLE_PULL_COST_DISCOUNT = 30;
+  const ELEVEN_PULL_COST = 1500;
+  const ELEVEN_PULL_COST_DISCOUNT = 750;
+  const FIFTEEN_PULL_COST = 2100;
+
+  function getCost(type: ConnectionType) {
+    switch (type) {
+      case "normal":
+        return SINGLE_PULL_COST;
+      case "guaranteed11":
+        return ELEVEN_PULL_COST;
+      case "guaranteed15":
+        return FIFTEEN_PULL_COST;
+    }
+  }
+
+  function getSmallestVertex(
+    distances: Map<TrackGraphNode, number>,
+    queue: Set<TrackGraphNode>
+  ) {
+    let smallest: TrackGraphNode | null = null;
+    let smallestDistance = Infinity;
+    for (const node of queue) {
+      const distance = distances.get(node)!;
+      if (distance < smallestDistance) {
+        smallest = node;
+        smallestDistance = distance;
+      }
+    }
+    return smallest;
+  }
+
+  function djikstraSearch(graph: TrackGraph, start: TrackGraphNode) {
+    const distances = new Map<TrackGraphNode, number>();
+    const previous = new Map<TrackGraphNode, TrackGraphNode | null>();
+    const queue = new Set<TrackGraphNode>();
+    for (const node of graph.nodes.values()) {
+      distances.set(node, Infinity);
+      previous.set(node, null);
+      queue.add(node);
+    }
+    distances.set(start, 0);
+
+    while (queue.size > 0) {
+      const vertex = getSmallestVertex(distances, queue);
+      // probably out of "resources"
+      if (!vertex) break;
+      queue.delete(vertex!);
+    }
+    console.log("done");
   }
 
   const { leftTrack, rightTrack } = parseTable();
