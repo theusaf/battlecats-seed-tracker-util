@@ -377,7 +377,25 @@
     return smallest;
   }
 
-  function djikstraSearch(
+  function getPath(
+    previous: Map<TrackGraphNode, TrackGraphNode | null>,
+    start: TrackGraphNode,
+    end: TrackGraphNode
+  ) {
+    const path: TrackGraphNode[] = [];
+    let current = end;
+    while (current !== start) {
+      path.push(current);
+      current = previous.get(current)!;
+    }
+    path.push(start);
+    path.reverse();
+    return path;
+  }
+
+  // a modified version of Dijkstra's algorithm
+  // somewhat like a star search
+  function graphSearch(
     graph: TrackGraph,
     start: TrackGraphNode,
     {
@@ -385,11 +403,13 @@
       tickets,
       catFood,
       hasDiscount,
+      foundCatValue = ELEVEN_PULL_COST,
     }: {
       cats: string[];
       tickets: number;
       catFood: number;
       hasDiscount: boolean;
+      foundCatValue?: number;
     }
   ) {
     if (cats.length === 0) {
@@ -409,11 +429,47 @@
     }
     distances.set(start, new Distance(tickets, catFood, 0));
 
+    const catSetsFound: Map<
+      number,
+      {
+        cats: Set<string>;
+        path: TrackGraphNode[];
+      }[]
+    > = new Map();
     while (queue.size > 0) {
       const vertex = getSmallestVertex(distances, queue);
       // probably out of "resources"
       if (!vertex) break;
       queue.delete(vertex!);
+
+      // check cats found!
+      const catsFound = distances
+        .get(vertex)!
+        .getCats()
+        .filter((cat) => cats.includes(cat));
+      if (catsFound.length > 0) {
+        if (!catSetsFound.has(catsFound.length)) {
+          catSetsFound.set(catsFound.length, []);
+        }
+        const catLengthSets = catSetsFound.get(catsFound.length)!;
+        let found = false;
+        for (const catSet of catLengthSets) {
+          if (catsFound.every((cat) => catSet.cats.has(cat))) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          catLengthSets.push({
+            cats: new Set(catsFound),
+            path: getPath(previous, start, vertex),
+          });
+        }
+        if (catLengthSets.length === cats.length) {
+          // we found all cats!
+          break;
+        }
+      }
 
       for (const [neighbor, distanceType] of vertex.neighbors.entries()) {
         if (!queue.has(neighbor)) continue;
@@ -428,55 +484,69 @@
         }
         let alt = vertexDistance.getValue() + cost;
         if (catFood < 0) alt = Infinity;
+
+        const distance = new Distance(tickets, catFood, alt),
+          currentCats = vertexDistance.getCats();
+        for (const cat of currentCats) {
+          distance.addCat(cat);
+        }
+
+        // heuristic for finding wanted cats
+        function handleNewWanted(catName: string) {
+          if (cats.includes(catName) && !distance.hasCat(catName)) {
+            alt -= foundCatValue;
+            distance.virtualFoodUsed = alt;
+          }
+        }
+
+        // simulate pull
+        switch (distanceType) {
+          case "normal": {
+            handleNewWanted(neighbor.catName);
+            distance.addCat(neighbor.catName);
+            break;
+          }
+          case "guaranteed11": {
+            distance.addCat(neighbor.catName);
+            let start = vertex.nextNormalPullNode;
+            for (let i = 0; i < 10; i++) {
+              if (!start) break;
+              handleNewWanted(start!.catName);
+              distance.addCat(start!.catName);
+              start = start.nextNormalPullNode;
+            }
+            break;
+          }
+          case "guaranteed15": {
+            distance.addCat(neighbor.catName);
+            let start = vertex.nextNormalPullNode;
+            for (let i = 0; i < 14; i++) {
+              if (!start) break;
+              handleNewWanted(start!.catName);
+              distance.addCat(start!.catName);
+              start = start.nextNormalPullNode;
+            }
+            break;
+          }
+        }
+
         if (alt < distances.get(neighbor)!.getValue()) {
-          const distance = new Distance(tickets, catFood, alt),
-            currentCats = vertexDistance.getCats();
-          for (const cat of currentCats) {
-            distance.addCat(cat);
-          }
-
-          // simulate pull
-          switch (distanceType) {
-            case "normal": {
-              distance.addCat(neighbor.catName);
-              break;
-            }
-            case "guaranteed11": {
-              distance.addCat(neighbor.catName);
-              let start = vertex.nextNormalPullNode;
-              for (let i = 0; i < 10; i++) {
-                if (!start) break;
-                distance.addCat(start!.catName);
-                start = start.nextNormalPullNode;
-              }
-              break;
-            }
-            case "guaranteed15": {
-              distance.addCat(neighbor.catName);
-              let start = vertex.nextNormalPullNode;
-              for (let i = 0; i < 14; i++) {
-                if (!start) break;
-                distance.addCat(start!.catName);
-                start = start.nextNormalPullNode;
-              }
-              break;
-            }
-          }
-
           // update distances
           distances.set(neighbor, distance);
           previous.set(neighbor, vertex);
         }
       }
     }
+    return catSetsFound;
   }
 
   const { leftTrack, rightTrack } = parseTable();
   const graph = generateGraph(leftTrack, rightTrack);
-  const results = djikstraSearch(graph, graph.getNode("1A")!, {
+  const results = graphSearch(graph, graph.getNode("1A")!, {
     cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
     tickets: 69,
     catFood: 4000,
     hasDiscount: true,
   });
+  (window as any).results = results;
 }
