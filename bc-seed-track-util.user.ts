@@ -31,7 +31,7 @@
 
   class TrackGraphNode {
     neighbors: Map<TrackGraphNode, ConnectionType> = new Map();
-    extraPullNode: TrackGraphNode | null = null;
+    nextNormalPullNode: TrackGraphNode | null = null;
     element: HTMLElement;
     name: string;
 
@@ -248,11 +248,11 @@
             const next = graph.getNode(nextName);
             if (next) {
               node!.neighbors.set(next, "normal");
-              node!.extraPullNode = next;
+              node!.nextNormalPullNode = next;
             }
           } else {
             node!.neighbors.set(normalPullNext, "normal");
-            node!.extraPullNode = normalPullNext;
+            node!.nextNormalPullNode = normalPullNext;
           }
         }
 
@@ -288,11 +288,11 @@
             const next = graph.getNode(nextName);
             if (next) {
               node!.neighbors.set(next, "normal");
-              node!.extraPullNode = next;
+              node!.nextNormalPullNode = next;
             }
           } else {
             node!.neighbors.set(normalPullNext, "normal");
-            node!.extraPullNode = normalPullNext;
+            node!.nextNormalPullNode = normalPullNext;
           }
         }
 
@@ -318,13 +318,29 @@
   class Distance {
     ticketsLeft: number;
     catFoodLeft: number;
-
     virtualFoodUsed: number;
+    catsFound: Set<string> = new Set();
 
     constructor(ticketsLeft: number, catFoodLeft: number, initialValue = 0) {
       this.ticketsLeft = ticketsLeft;
       this.catFoodLeft = catFoodLeft;
       this.virtualFoodUsed = initialValue;
+    }
+
+    getValue() {
+      return this.virtualFoodUsed;
+    }
+
+    addCat(catName: string) {
+      this.catsFound.add(catName);
+    }
+
+    hasCat(catName: string) {
+      return this.catsFound.has(catName);
+    }
+
+    getCats() {
+      return [...this.catsFound];
     }
   }
 
@@ -346,42 +362,121 @@
   }
 
   function getSmallestVertex(
-    distances: Map<TrackGraphNode, number>,
+    distances: Map<TrackGraphNode, Distance>,
     queue: Set<TrackGraphNode>
   ) {
     let smallest: TrackGraphNode | null = null;
     let smallestDistance = Infinity;
     for (const node of queue) {
       const distance = distances.get(node)!;
-      if (distance < smallestDistance) {
+      if (distance.getValue() < smallestDistance) {
         smallest = node;
-        smallestDistance = distance;
+        smallestDistance = distance.getValue();
       }
     }
     return smallest;
   }
 
-  function djikstraSearch(graph: TrackGraph, start: TrackGraphNode) {
-    const distances = new Map<TrackGraphNode, number>();
+  function djikstraSearch(
+    graph: TrackGraph,
+    start: TrackGraphNode,
+    {
+      cats,
+      tickets,
+      catFood,
+      hasDiscount,
+    }: {
+      cats: string[];
+      tickets: number;
+      catFood: number;
+      hasDiscount: boolean;
+    }
+  ) {
+    if (cats.length === 0) {
+      throw new Error("There must be at least one cat to search for.");
+    }
+    if (hasDiscount) {
+      catFood += ELEVEN_PULL_COST - ELEVEN_PULL_COST_DISCOUNT;
+      catFood += SINGLE_PULL_COST - SINGLE_PULL_COST_DISCOUNT;
+    }
+    const distances = new Map<TrackGraphNode, Distance>();
     const previous = new Map<TrackGraphNode, TrackGraphNode | null>();
     const queue = new Set<TrackGraphNode>();
     for (const node of graph.nodes.values()) {
-      distances.set(node, Infinity);
+      distances.set(node, new Distance(tickets, catFood, Infinity));
       previous.set(node, null);
       queue.add(node);
     }
-    distances.set(start, 0);
+    distances.set(start, new Distance(tickets, catFood, 0));
 
     while (queue.size > 0) {
       const vertex = getSmallestVertex(distances, queue);
       // probably out of "resources"
       if (!vertex) break;
       queue.delete(vertex!);
+
+      for (const [neighbor, distanceType] of vertex.neighbors.entries()) {
+        if (!queue.has(neighbor)) continue;
+        const cost = getCost(distanceType),
+          vertexDistance = distances.get(vertex)!;
+        let tickets = vertexDistance.ticketsLeft,
+          catFood = vertexDistance.catFoodLeft;
+        if (distanceType === "normal" && tickets > 0) {
+          tickets--;
+        } else {
+          catFood -= cost;
+        }
+        let alt = vertexDistance.getValue() + cost;
+        if (catFood < 0) alt = Infinity;
+        if (alt < distances.get(neighbor)!.getValue()) {
+          const distance = new Distance(tickets, catFood, alt),
+            currentCats = vertexDistance.getCats();
+          for (const cat of currentCats) {
+            distance.addCat(cat);
+          }
+
+          // simulate pull
+          switch (distanceType) {
+            case "normal": {
+              distance.addCat(neighbor.catName);
+              break;
+            }
+            case "guaranteed11": {
+              distance.addCat(neighbor.catName);
+              let start = vertex.nextNormalPullNode;
+              for (let i = 0; i < 10; i++) {
+                if (!start) break;
+                distance.addCat(start!.catName);
+                start = start.nextNormalPullNode;
+              }
+              break;
+            }
+            case "guaranteed15": {
+              distance.addCat(neighbor.catName);
+              let start = vertex.nextNormalPullNode;
+              for (let i = 0; i < 14; i++) {
+                if (!start) break;
+                distance.addCat(start!.catName);
+                start = start.nextNormalPullNode;
+              }
+              break;
+            }
+          }
+
+          // update distances
+          distances.set(neighbor, distance);
+          previous.set(neighbor, vertex);
+        }
+      }
     }
-    console.log("done");
   }
 
   const { leftTrack, rightTrack } = parseTable();
   const graph = generateGraph(leftTrack, rightTrack);
-  const results = djikstraSearch(graph, graph.getNode("1A")!);
+  const results = djikstraSearch(graph, graph.getNode("1A")!, {
+    cats: ["Herme", "PPT48", "HMS Princess", "Calette"],
+    tickets: 69,
+    catFood: 4000,
+    hasDiscount: true,
+  });
 }
