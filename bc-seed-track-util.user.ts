@@ -831,10 +831,10 @@
             <div>
               <span class="bstu-result-cats">${catList.join(", ")}</span>
               <span class="bstu-result-distance">
-                <span class="bstu-result-distance-food">${
+                <span class="bstu-result-distance-food" title="remaining cat food">${
                   finalDistance.catFoodLeft
                 }</span>
-                <span class="bstu-result-distance-tickets">${
+                <span class="bstu-result-distance-tickets" title="remaining tickets">${
                   finalDistance.ticketsLeft
                 }</span>
               </span>
@@ -854,6 +854,19 @@
               </span>
             </div>
           `;
+
+          setTimeout(() => {
+            resultDiv
+              .querySelector<HTMLSpanElement>(".bstu-result-path")!
+              .addEventListener("click", (e) => {
+                // copy path to clipboard
+                const path = (e.target as HTMLElement).getAttribute(
+                  "data-path"
+                )!;
+                navigator.clipboard.writeText(path);
+                alert("Copied path to clipboard!");
+              });
+          });
         } else {
           resultDiv.innerHTML = `
             <div>

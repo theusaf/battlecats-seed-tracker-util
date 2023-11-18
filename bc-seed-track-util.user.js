@@ -667,8 +667,8 @@
             <div>
               <span class="bstu-result-cats">${catList.join(", ")}</span>
               <span class="bstu-result-distance">
-                <span class="bstu-result-distance-food">${finalDistance.catFoodLeft}</span>
-                <span class="bstu-result-distance-tickets">${finalDistance.ticketsLeft}</span>
+                <span class="bstu-result-distance-food" title="remaining cat food">${finalDistance.catFoodLeft}</span>
+                <span class="bstu-result-distance-tickets" title="remaining tickets">${finalDistance.ticketsLeft}</span>
               </span>
             </div>
             <div>
@@ -679,6 +679,15 @@
               </span>
             </div>
           `;
+                    setTimeout(() => {
+                        resultDiv
+                            .querySelector(".bstu-result-path")
+                            .addEventListener("click", (e) => {
+                            // copy path to clipboard
+                            const path = e.target.getAttribute("data-path");
+                            navigator.clipboard.writeText(path);
+                        });
+                    });
                 }
                 else {
                     resultDiv.innerHTML = `
