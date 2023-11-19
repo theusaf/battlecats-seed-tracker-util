@@ -536,7 +536,7 @@
         // simulate pull
         switch (distanceType) {
           case "normal": {
-            distance.addCat(neighbor.catName);
+            distance.addCat(vertex.catName);
             handleNewWanted(neighbor.catName);
             break;
           }
@@ -669,6 +669,19 @@
         background: gold;
         padding: 0.1rem;
       }
+
+      .bstu-rarity-rare {
+        color: white;
+      }
+      .bstu-rarity-super {
+        color: blue;
+      }
+      .bstu-rarity-uber {
+        color: purple;
+      }
+      .bstu-rarity-legend {
+        color: red;
+      }
     </style>
     <div id="bstu-main">
       <details>
@@ -741,6 +754,14 @@
         });
     }
 
+    function getRarity(cat: string) {
+      const option = [
+          ...selector.querySelectorAll<HTMLOptionElement>("option"),
+        ].find((option) => option.textContent === cat)!,
+        optGroup = option.parentElement! as HTMLOptGroupElement;
+      return optGroup.label.match(/\w+/)![0].toLowerCase();
+    }
+
     function saveToLocalStore() {
       localStorage.setItem(
         "bstu-data",
@@ -776,109 +797,129 @@
     });
 
     startButton.addEventListener("click", () => {
-      const { leftTrack, rightTrack } = parseTable(),
-        graph = generateGraph(leftTrack, rightTrack),
-        results = multiSearch(graph, graph.getNode("1A")!, {
-          cats: [...choices],
-          tickets: ticketsInput.valueAsNumber,
-          catFood: catFoodInput.valueAsNumber || Infinity,
-          hasDiscount: discountCheckbox.checked,
-          foundCatValue: 0,
-        });
-      saveToLocalStore();
-      console.log(results);
-
-      // generate output
-      for (const [catList, result] of [...results.entries()].sort(
-        ([a], [b]) => b.length - a.length
-      )) {
-        const resultDiv = document.createElement("div");
-        resultDiv.className = "bstu-result";
-        if (result) {
-          const { path, finalDistance } = result,
-            simplifiedPath: {
-              type: "guaranteed" | "normal";
-              count: number;
-            }[] = [];
-
-          let currentPullType: ConnectionType | null = null,
-            currentPullCount = 0;
-          for (let i = 1; i < path.length; i++) {
-            const prev = path[i - 1],
-              current = path[i],
-              type = prev.neighbors.get(current)!;
-            if (type === currentPullType) {
-              currentPullCount++;
-            } else {
-              if (currentPullType) {
-                simplifiedPath.push({
-                  type: currentPullType === "normal" ? "normal" : "guaranteed",
-                  count: currentPullCount,
-                });
-              }
-              currentPullType = type;
-              currentPullCount = 1;
-            }
-          }
-          if (currentPullType) {
-            simplifiedPath.push({
-              type: currentPullType === "normal" ? "normal" : "guaranteed",
-              count: currentPullCount,
-            });
-          }
-
-          resultDiv.innerHTML = `
-            <div>
-              <span class="bstu-result-cats">${catList.join(", ")}</span>
-              <span class="bstu-result-distance">
-                <span class="bstu-result-distance-food" title="remaining cat food">${
-                  finalDistance.catFoodLeft
-                }</span>
-                <span class="bstu-result-distance-tickets" title="remaining tickets">${
-                  finalDistance.ticketsLeft
-                }</span>
-              </span>
-            </div>
-            <div>
-              <span class="bstu-result-path" data-path="${htmlEntities(
-                path.map((node) => `${node.catName} (${node.name})`).join(" > ")
-              )}">
-              ${simplifiedPath
-                .map(
-                  (pull) =>
-                    `${pull.count} ${
-                      pull.type === "normal" ? "pull" : "guaranteed pull"
-                    }${pull.count > 1 ? "s" : ""}`
-                )
-                .join(", ")}
-              </span>
-            </div>
-          `;
-
-          setTimeout(() => {
-            resultDiv
-              .querySelector<HTMLSpanElement>(".bstu-result-path")!
-              .addEventListener("click", (e) => {
-                // copy path to clipboard
-                const path = (e.target as HTMLElement).getAttribute(
-                  "data-path"
-                )!;
-                navigator.clipboard.writeText(path);
-                alert("Copied path to clipboard!");
-              });
+      resultsArea.innerHTML = "";
+      setTimeout(() => {
+        const { leftTrack, rightTrack } = parseTable(),
+          graph = generateGraph(leftTrack, rightTrack),
+          results = multiSearch(graph, graph.getNode("1A")!, {
+            cats: [...choices],
+            tickets: ticketsInput.valueAsNumber,
+            catFood: catFoodInput.valueAsNumber || Infinity,
+            hasDiscount: discountCheckbox.checked,
+            // foundCatValue: 0,
           });
-        } else {
-          resultDiv.innerHTML = `
-            <div>
-              <span class="bstu-result-cats">${catList.join(", ")}</span>
-            </div>
-            <div>
-              <span class="bstu-result-path">No path found</span>
-            </div>
-          `;
+        saveToLocalStore();
+        console.log(results);
+
+        // generate output
+        for (const [catList, result] of [...results.entries()].sort(
+          ([a], [b]) => b.length - a.length
+        )) {
+          const resultDiv = document.createElement("div");
+          resultDiv.className = "bstu-result";
+          if (result) {
+            const { path, finalDistance } = result,
+              simplifiedPath: {
+                type: "guaranteed" | "normal";
+                count: number;
+              }[] = [];
+
+            let currentPullType: ConnectionType | null = null,
+              currentPullCount = 0;
+            for (let i = 1; i < path.length; i++) {
+              const prev = path[i - 1],
+                current = path[i],
+                type = prev.neighbors.get(current)!;
+              if (type === currentPullType) {
+                currentPullCount++;
+              } else {
+                if (currentPullType) {
+                  simplifiedPath.push({
+                    type:
+                      currentPullType === "normal" ? "normal" : "guaranteed",
+                    count: currentPullCount,
+                  });
+                }
+                currentPullType = type;
+                currentPullCount = 1;
+              }
+            }
+            if (currentPullType) {
+              simplifiedPath.push({
+                type: currentPullType === "normal" ? "normal" : "guaranteed",
+                count: currentPullCount,
+              });
+            }
+
+            resultDiv.innerHTML = `
+              <div>
+                <span class="bstu-result-cats">${catList
+                  .map(
+                    (cat) =>
+                      `<span class="bstu-rarity-${getRarity(
+                        cat
+                      )}">${htmlEntities(cat)}</span>`
+                  )
+                  .join(", ")}</span>
+                <span class="bstu-result-distance">
+                  <span class="bstu-result-distance-food" title="remaining cat food">${
+                    finalDistance.catFoodLeft
+                  }</span>
+                  <span class="bstu-result-distance-tickets" title="remaining tickets">${
+                    finalDistance.ticketsLeft
+                  }</span>
+                </span>
+              </div>
+              <div>
+                <span class="bstu-result-path" data-path="${htmlEntities(
+                  path
+                    .map((node) => `${node.catName} (${node.name})`)
+                    .join(" > ")
+                )}">
+                ${simplifiedPath
+                  .map(
+                    (pull) =>
+                      `${pull.count} ${
+                        pull.type === "normal" ? "pull" : "guaranteed pull"
+                      }${pull.count > 1 ? "s" : ""}`
+                  )
+                  .join(", ")}
+                </span>
+              </div>
+            `;
+
+            setTimeout(() => {
+              resultDiv
+                .querySelector<HTMLSpanElement>(".bstu-result-path")!
+                .addEventListener("click", (e) => {
+                  // copy path to clipboard
+                  const path = (e.target as HTMLElement).getAttribute(
+                    "data-path"
+                  )!;
+                  navigator.clipboard.writeText(path);
+                  alert("Copied path to clipboard!");
+                });
+            });
+          } else {
+            resultDiv.innerHTML = `
+              <div>
+                <span class="bstu-result-cats">${catList
+                  .map(
+                    (cat) =>
+                      `<span class="bstu-rarity-${getRarity(
+                        cat
+                      )}">${htmlEntities(cat)}</span>`
+                  )
+                  .join(", ")}</span>
+              </div>
+              <div>
+                <span class="bstu-result-path">No path found</span>
+              </div>
+            `;
+          }
+          resultsArea.append(resultDiv);
         }
-        resultsArea.append(resultDiv);
-      }
+      }, 500);
     });
   });
 })();

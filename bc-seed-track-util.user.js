@@ -425,7 +425,7 @@
                 // simulate pull
                 switch (distanceType) {
                     case "normal": {
-                        distance.addCat(neighbor.catName);
+                        distance.addCat(vertex.catName);
                         handleNewWanted(neighbor.catName);
                         break;
                     }
@@ -539,6 +539,19 @@
         background: gold;
         padding: 0.1rem;
       }
+
+      .bstu-rarity-rare {
+        color: white;
+      }
+      .bstu-rarity-super {
+        color: blue;
+      }
+      .bstu-rarity-uber {
+        color: purple;
+      }
+      .bstu-rarity-legend {
+        color: red;
+      }
     </style>
     <div id="bstu-main">
       <details>
@@ -596,6 +609,12 @@
                 node.remove();
             });
         }
+        function getRarity(cat) {
+            const option = [
+                ...selector.querySelectorAll("option"),
+            ].find((option) => option.textContent === cat), optGroup = option.parentElement;
+            return optGroup.label.match(/\w+/)[0].toLowerCase();
+        }
         function saveToLocalStore() {
             localStorage.setItem("bstu-data", JSON.stringify({
                 cats: [...choices],
@@ -625,82 +644,92 @@
             setTimeout(() => (selector.value = ""));
         });
         startButton.addEventListener("click", () => {
-            const { leftTrack, rightTrack } = parseTable(), graph = generateGraph(leftTrack, rightTrack), results = multiSearch(graph, graph.getNode("1A"), {
-                cats: [...choices],
-                tickets: ticketsInput.valueAsNumber,
-                catFood: catFoodInput.valueAsNumber || Infinity,
-                hasDiscount: discountCheckbox.checked,
-                foundCatValue: 0,
-            });
-            saveToLocalStore();
-            console.log(results);
-            // generate output
-            for (const [catList, result] of [...results.entries()].sort(([a], [b]) => b.length - a.length)) {
-                const resultDiv = document.createElement("div");
-                resultDiv.className = "bstu-result";
-                if (result) {
-                    const { path, finalDistance } = result, simplifiedPath = [];
-                    let currentPullType = null, currentPullCount = 0;
-                    for (let i = 1; i < path.length; i++) {
-                        const prev = path[i - 1], current = path[i], type = prev.neighbors.get(current);
-                        if (type === currentPullType) {
-                            currentPullCount++;
-                        }
-                        else {
-                            if (currentPullType) {
-                                simplifiedPath.push({
-                                    type: currentPullType === "normal" ? "normal" : "guaranteed",
-                                    count: currentPullCount,
-                                });
+            resultsArea.innerHTML = "";
+            setTimeout(() => {
+                const { leftTrack, rightTrack } = parseTable(), graph = generateGraph(leftTrack, rightTrack), results = multiSearch(graph, graph.getNode("1A"), {
+                    cats: [...choices],
+                    tickets: ticketsInput.valueAsNumber,
+                    catFood: catFoodInput.valueAsNumber || Infinity,
+                    hasDiscount: discountCheckbox.checked,
+                    // foundCatValue: 0,
+                });
+                saveToLocalStore();
+                console.log(results);
+                // generate output
+                for (const [catList, result] of [...results.entries()].sort(([a], [b]) => b.length - a.length)) {
+                    const resultDiv = document.createElement("div");
+                    resultDiv.className = "bstu-result";
+                    if (result) {
+                        const { path, finalDistance } = result, simplifiedPath = [];
+                        let currentPullType = null, currentPullCount = 0;
+                        for (let i = 1; i < path.length; i++) {
+                            const prev = path[i - 1], current = path[i], type = prev.neighbors.get(current);
+                            if (type === currentPullType) {
+                                currentPullCount++;
                             }
-                            currentPullType = type;
-                            currentPullCount = 1;
+                            else {
+                                if (currentPullType) {
+                                    simplifiedPath.push({
+                                        type: currentPullType === "normal" ? "normal" : "guaranteed",
+                                        count: currentPullCount,
+                                    });
+                                }
+                                currentPullType = type;
+                                currentPullCount = 1;
+                            }
                         }
-                    }
-                    if (currentPullType) {
-                        simplifiedPath.push({
-                            type: currentPullType === "normal" ? "normal" : "guaranteed",
-                            count: currentPullCount,
+                        if (currentPullType) {
+                            simplifiedPath.push({
+                                type: currentPullType === "normal" ? "normal" : "guaranteed",
+                                count: currentPullCount,
+                            });
+                        }
+                        resultDiv.innerHTML = `
+              <div>
+                <span class="bstu-result-cats">${catList
+                            .map((cat) => `<span class="bstu-rarity-${getRarity(cat)}">${htmlEntities(cat)}</span>`)
+                            .join(", ")}</span>
+                <span class="bstu-result-distance">
+                  <span class="bstu-result-distance-food" title="remaining cat food">${finalDistance.catFoodLeft}</span>
+                  <span class="bstu-result-distance-tickets" title="remaining tickets">${finalDistance.ticketsLeft}</span>
+                </span>
+              </div>
+              <div>
+                <span class="bstu-result-path" data-path="${htmlEntities(path
+                            .map((node) => `${node.catName} (${node.name})`)
+                            .join(" > "))}">
+                ${simplifiedPath
+                            .map((pull) => `${pull.count} ${pull.type === "normal" ? "pull" : "guaranteed pull"}${pull.count > 1 ? "s" : ""}`)
+                            .join(", ")}
+                </span>
+              </div>
+            `;
+                        setTimeout(() => {
+                            resultDiv
+                                .querySelector(".bstu-result-path")
+                                .addEventListener("click", (e) => {
+                                // copy path to clipboard
+                                const path = e.target.getAttribute("data-path");
+                                navigator.clipboard.writeText(path);
+                                alert("Copied path to clipboard!");
+                            });
                         });
                     }
-                    resultDiv.innerHTML = `
-            <div>
-              <span class="bstu-result-cats">${catList.join(", ")}</span>
-              <span class="bstu-result-distance">
-                <span class="bstu-result-distance-food" title="remaining cat food">${finalDistance.catFoodLeft}</span>
-                <span class="bstu-result-distance-tickets" title="remaining tickets">${finalDistance.ticketsLeft}</span>
-              </span>
-            </div>
-            <div>
-              <span class="bstu-result-path" data-path="${htmlEntities(path.map((node) => `${node.catName} (${node.name})`).join(" > "))}">
-              ${simplifiedPath
-                        .map((pull) => `${pull.count} ${pull.type === "normal" ? "pull" : "guaranteed pull"}${pull.count > 1 ? "s" : ""}`)
-                        .join(", ")}
-              </span>
-            </div>
-          `;
-                    setTimeout(() => {
-                        resultDiv
-                            .querySelector(".bstu-result-path")
-                            .addEventListener("click", (e) => {
-                            // copy path to clipboard
-                            const path = e.target.getAttribute("data-path");
-                            navigator.clipboard.writeText(path);
-                        });
-                    });
+                    else {
+                        resultDiv.innerHTML = `
+              <div>
+                <span class="bstu-result-cats">${catList
+                            .map((cat) => `<span class="bstu-rarity-${getRarity(cat)}">${htmlEntities(cat)}</span>`)
+                            .join(", ")}</span>
+              </div>
+              <div>
+                <span class="bstu-result-path">No path found</span>
+              </div>
+            `;
+                    }
+                    resultsArea.append(resultDiv);
                 }
-                else {
-                    resultDiv.innerHTML = `
-            <div>
-              <span class="bstu-result-cats">${catList.join(", ")}</span>
-            </div>
-            <div>
-              <span class="bstu-result-path">No path found</span>
-            </div>
-          `;
-                }
-                resultsArea.append(resultDiv);
-            }
+            }, 500);
         });
     });
 })();
