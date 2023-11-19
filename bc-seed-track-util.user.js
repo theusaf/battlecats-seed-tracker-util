@@ -194,9 +194,9 @@
             if (normalPull) {
                 const guaranteedPullName = `${normalPull.name}G`, guaranteedPull = graph.getNode(guaranteedPullName);
                 if (guaranteedPull) {
-                    const guaranteedPullLinkName = guaranteedPull.leadsToName, guaranteedLink = graph.getNode(guaranteedPullLinkName), nameNumber = +guaranteedPullLinkName.match(/(\d+)/)[1];
+                    const guaranteedPullLinkName = guaranteedPull.leadsToName, guaranteedLink = graph.getNode(guaranteedPullLinkName), nameNumber = +normalPull.name.match(/(\d+)/)[1], linkNameNumber = +guaranteedPullLinkName.match(/(\d+)/)[1];
                     guaranteedPull.nextNormalPullNode = guaranteedLink ?? null;
-                    node.neighbors.set(guaranteedPull, nameNumber - +nodeNumber <= 12 ? "guaranteed11" : "guaranteed15");
+                    node.neighbors.set(guaranteedPull, linkNameNumber - +nameNumber <= 14 ? "guaranteed11" : "guaranteed15");
                 }
             }
         }
@@ -206,7 +206,7 @@
         const guaranteedNode = graph.getNode("1AG");
         if (guaranteedNode) {
             // get guaranteed node type
-            const guaranteedNodeName = guaranteedNode.leadsToName, guaranteedNodeNumber = +guaranteedNodeName.match(/(\d+)/)[1], guaranteedNodeType = guaranteedNodeNumber <= 12 ? "guaranteed11" : "guaranteed15";
+            const guaranteedNodeName = guaranteedNode.leadsToName, guaranteedNodeNumber = +guaranteedNodeName.match(/(\d+)/)[1], guaranteedNodeType = guaranteedNodeNumber <= 14 ? "guaranteed11" : "guaranteed15";
             zeroNode.neighbors.set(guaranteedNode, guaranteedNodeType);
         }
         return graph;
@@ -316,30 +316,31 @@
                 }
                 if (!found) {
                     // adjust distance output
-                    const distance = distances.get(vertex), path = getPath(previous, start, vertex);
+                    const distance = distances.get(vertex), path = getPath(previous, start, vertex), duplicateDistance = new Distance(distance.ticketsLeft, distance.catFoodLeft, distance.getValue());
                     if (hasDiscount) {
-                        if (distance.ticketsLeft > 0) {
-                            distance.catFoodLeft -=
+                        if (duplicateDistance.ticketsLeft > 0) {
+                            duplicateDistance.catFoodLeft -=
                                 SINGLE_PULL_COST - SINGLE_PULL_COST_DISCOUNT;
                         }
                         // scan for any guaranteed pulls
                         let found = false;
-                        for (let i = 1; i < path.length; i++) {
-                            const node = path[i], prev = path[i - 1];
-                            if (prev.neighbors.get(node) === "guaranteed11") {
+                        for (let i = 0; i < path.length; i++) {
+                            const node = path[i];
+                            if (node.name.includes("G")) {
                                 found = true;
                                 break;
                             }
                         }
                         if (!found) {
-                            distance.catFoodLeft -=
+                            console.log("no guaranteed pulls found", path);
+                            duplicateDistance.catFoodLeft -=
                                 ELEVEN_PULL_COST - ELEVEN_PULL_COST_DISCOUNT;
                         }
                     }
                     catLengthSets.push({
                         cats: new Set(catsFound),
                         path,
-                        finalDistance: distance,
+                        finalDistance: duplicateDistance,
                     });
                 }
                 if (catSetsFound.size === cats.length) {
