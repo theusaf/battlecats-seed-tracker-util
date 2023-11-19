@@ -224,50 +224,42 @@
     nodify(leftTrack, "A");
     nodify(rightTrack, "B");
 
-    function connect(track: Track[], letter: "A" | "B") {
-      for (let i = 0; i < track.length; i++) {
-        const [normal] = track[i];
-        for (let j = 0; j < normal.length; j++) {
-          const node = graph.getNode(`${i + 1}${letter}${j === 0 ? "" : "R"}`),
-            nodeCatName = node!.catName;
+    for (const node of graph.nodes.values()) {
+      const nodeName = node.name,
+        nodeCatName = node.catName,
+        [, nodeNumber, nodeFlags] = nodeName.match(/(\d+)(\w+)/)!;
 
-          // normal pull
-          let normalPullNextName = node!.leadsToName ?? `${i + 2}${letter}`,
-            normalPullNext = graph.getNode(normalPullNextName);
-          if (normalPullNext) {
-            const normalPullNextCatName = normalPullNext.catName;
-            if (normalPullNextCatName === nodeCatName) {
-              normalPullNextName = `${i + 2}${letter}R`;
-              normalPullNext = graph.getNode(normalPullNextName);
-            }
-            if (normalPullNext) {
-              node!.neighbors.set(normalPullNext, "normal");
-              node!.nextNormalPullNode = normalPullNext;
-            }
-          }
+      // normal pull
+      let normalPullName = node.leadsToName ?? `${+nodeNumber + 1}${nodeFlags}`,
+        normalPull = graph.getNode(normalPullName);
+      if (normalPull) {
+        const normalPullNextCatName = normalPull.catName;
+        if (normalPullNextCatName === nodeCatName) {
+          normalPullName = `${normalPullName}R`;
+          normalPull = graph.getNode(normalPullName);
+        }
+        if (normalPull) {
+          node!.neighbors.set(normalPull, "normal");
+          node!.nextNormalPullNode = normalPull;
+        }
+      }
 
-          // guaranteed pull
-          if (normalPullNext) {
-            const guaranteedPullName = `${normalPullNext.name}G`,
-              guaranteedPullNext = graph.getNode(guaranteedPullName);
-            if (guaranteedPullNext) {
-              const guaranteedPullLinkName = guaranteedPullNext.leadsToName,
-                guaranteedLink = graph.getNode(guaranteedPullLinkName!),
-                nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
-              guaranteedPullNext.nextNormalPullNode = guaranteedLink ?? null;
-              node!.neighbors.set(
-                guaranteedPullNext!,
-                nameNumber - (i + 1) <= 12 ? "guaranteed11" : "guaranteed15"
-              );
-            }
-          }
+      // guaranteed pull
+      if (normalPull) {
+        const guaranteedPullName = `${normalPull.name}G`,
+          guaranteedPull = graph.getNode(guaranteedPullName);
+        if (guaranteedPull) {
+          const guaranteedPullLinkName = guaranteedPull.leadsToName,
+            guaranteedLink = graph.getNode(guaranteedPullLinkName!),
+            nameNumber = +guaranteedPullLinkName!.match(/(\d+)/)![1];
+          guaranteedPull.nextNormalPullNode = guaranteedLink ?? null;
+          node!.neighbors.set(
+            guaranteedPull!,
+            nameNumber - +nodeNumber <= 12 ? "guaranteed11" : "guaranteed15"
+          );
         }
       }
     }
-
-    // connect all items
-    connect(leftTrack, "A");
-    connect(rightTrack, "B");
 
     const zeroNode = new TrackGraphNode(document.createElement("div"), "0A");
     graph.addNode(zeroNode, "0A");
