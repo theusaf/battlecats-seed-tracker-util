@@ -273,7 +273,7 @@
     }
     // a modified version of Dijkstra's algorithm
     // somewhat like a star search
-    function graphSearch(graph, start, { cats, tickets, catFood, hasDiscount, foundCatValue = ELEVEN_PULL_COST, }) {
+    function graphSearch(graph, start, { cats, tickets, catFood, hasDiscount, foundCatValue = ELEVEN_PULL_COST, ticketValue = SINGLE_PULL_COST, }) {
         if (cats.length === 0) {
             throw new Error("There must be at least one cat to search for.");
         }
@@ -352,11 +352,13 @@
             for (const [neighbor, distanceType] of vertex.neighbors.entries()) {
                 if (!queue.has(neighbor))
                     continue;
-                const cost = getCost(distanceType), vertexDistance = distances.get(vertex);
+                let cost = getCost(distanceType);
+                const vertexDistance = distances.get(vertex);
                 let tickets = vertexDistance.ticketsLeft, catFood = vertexDistance.catFoodLeft;
                 // handle initial pull (including start)
                 if (distanceType === "normal" && tickets > 0) {
                     tickets--;
+                    cost = ticketValue;
                 }
                 else {
                     catFood -= cost;
@@ -421,7 +423,7 @@
         }
         yield [];
     }
-    function multiSearch(graph, start, { cats, tickets, catFood, hasDiscount }) {
+    function multiSearch(graph, start, { cats, tickets, catFood, hasDiscount, ticketValue }) {
         const results = new Map(), foundCatValues = [0, ELEVEN_PULL_COST, FIFTEEN_PULL_COST];
         for (const subset of subsets(cats)) {
             if (subset.length === 0)
@@ -433,6 +435,7 @@
                     catFood,
                     hasDiscount,
                     foundCatValue,
+                    ticketValue,
                 }), lengthResult = result.get(subset.length);
                 if (lengthResult) {
                     results.set(subset, lengthResult[0] ?? null);
@@ -529,6 +532,10 @@
               <label for="bstu-cat-food">Cat Food</label>
               <input type="number" id="bstu-cat-food" />
             </div>
+            <div>
+              <label for="bstu-ticket-value" title="The cat food value given to a ticket. Influences how much the algorithm will prefer using tickets.">Ticket Value</label>
+              <input type="number" id="bstu-ticket-value" />
+            </div>
           </div>
           <select id="bstu-selector"></select>
           <button id="bstu-start-button">Calculate Paths</button>
@@ -544,7 +551,7 @@
     document.body.appendChild(ui.content.cloneNode(true));
     await wait();
     // copy available cats
-    const selector = document.querySelector("#bstu-selector"), choicesArea = document.querySelector("#bstu-choices"), resultsArea = document.querySelector("#bstu-results"), startButton = document.querySelector("#bstu-start-button"), discountCheckbox = document.querySelector("#bstu-discount"), ticketsInput = document.querySelector("#bstu-tickets"), catFoodInput = document.querySelector("#bstu-cat-food"), providedCatSelector = document.querySelector("#find_select"), options = providedCatSelector.cloneNode(true)
+    const selector = document.querySelector("#bstu-selector"), choicesArea = document.querySelector("#bstu-choices"), resultsArea = document.querySelector("#bstu-results"), startButton = document.querySelector("#bstu-start-button"), discountCheckbox = document.querySelector("#bstu-discount"), ticketsInput = document.querySelector("#bstu-tickets"), catFoodInput = document.querySelector("#bstu-cat-food"), ticketValueInput = document.querySelector("#bstu-ticket-value"), providedCatSelector = document.querySelector("#find_select"), options = providedCatSelector.cloneNode(true)
         .children;
     selector.append(...options);
     selector.value = "";
@@ -578,6 +585,7 @@
             tickets: ticketsInput.value,
             catFood: catFoodInput.value,
             hasDiscount: discountCheckbox.checked,
+            ticketValue: ticketValueInput.value,
         }));
     }
     function loadFromLocalStore() {
@@ -592,6 +600,7 @@
         ticketsInput.value = data.tickets ?? "";
         catFoodInput.value = data.catFood ?? "";
         discountCheckbox.checked = data.hasDiscount ?? false;
+        ticketValueInput.value = data.ticketValue ?? "150";
     }
     loadFromLocalStore();
     selector.addEventListener("change", () => {
@@ -608,6 +617,7 @@
             tickets: ticketsInput.valueAsNumber,
             catFood: catFoodInput.valueAsNumber || Infinity,
             hasDiscount: discountCheckbox.checked,
+            ticketValue: ticketValueInput.valueAsNumber,
         });
         saveToLocalStore();
         console.log(results);

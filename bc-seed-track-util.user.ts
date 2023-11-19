@@ -360,6 +360,7 @@
     catFood: number;
     hasDiscount: boolean;
     foundCatValue?: number;
+    ticketValue?: number;
   }
 
   // a modified version of Dijkstra's algorithm
@@ -373,6 +374,7 @@
       catFood,
       hasDiscount,
       foundCatValue = ELEVEN_PULL_COST,
+      ticketValue = SINGLE_PULL_COST,
     }: SearchArgs
   ) {
     if (cats.length === 0) {
@@ -467,13 +469,14 @@
 
       for (const [neighbor, distanceType] of vertex.neighbors.entries()) {
         if (!queue.has(neighbor)) continue;
-        const cost = getCost(distanceType),
-          vertexDistance = distances.get(vertex)!;
+        let cost = getCost(distanceType);
+        const vertexDistance = distances.get(vertex)!;
         let tickets = vertexDistance.ticketsLeft,
           catFood = vertexDistance.catFoodLeft;
         // handle initial pull (including start)
         if (distanceType === "normal" && tickets > 0) {
           tickets--;
+          cost = ticketValue;
         } else {
           catFood -= cost;
         }
@@ -549,7 +552,7 @@
   function multiSearch(
     graph: TrackGraph,
     start: TrackGraphNode,
-    { cats, tickets, catFood, hasDiscount }: SearchArgs
+    { cats, tickets, catFood, hasDiscount, ticketValue }: SearchArgs
   ) {
     const results = new Map<
         string[],
@@ -569,6 +572,7 @@
             catFood,
             hasDiscount,
             foundCatValue,
+            ticketValue,
           }),
           lengthResult = result.get(subset.length);
         if (lengthResult) {
@@ -668,6 +672,10 @@
               <label for="bstu-cat-food">Cat Food</label>
               <input type="number" id="bstu-cat-food" />
             </div>
+            <div>
+              <label for="bstu-ticket-value" title="The cat food value given to a ticket. Influences how much the algorithm will prefer using tickets.">Ticket Value</label>
+              <input type="number" id="bstu-ticket-value" />
+            </div>
           </div>
           <select id="bstu-selector"></select>
           <button id="bstu-start-button">Calculate Paths</button>
@@ -692,6 +700,8 @@
       document.querySelector<HTMLInputElement>("#bstu-discount")!,
     ticketsInput = document.querySelector<HTMLInputElement>("#bstu-tickets")!,
     catFoodInput = document.querySelector<HTMLInputElement>("#bstu-cat-food")!,
+    ticketValueInput =
+      document.querySelector<HTMLInputElement>("#bstu-ticket-value")!,
     providedCatSelector =
       document.querySelector<HTMLSelectElement>("#find_select")!,
     options = (providedCatSelector.cloneNode(true) as HTMLSelectElement)
@@ -734,6 +744,7 @@
         tickets: ticketsInput.value,
         catFood: catFoodInput.value,
         hasDiscount: discountCheckbox.checked,
+        ticketValue: ticketValueInput.value,
       })
     );
   }
@@ -749,6 +760,7 @@
     ticketsInput.value = data.tickets ?? "";
     catFoodInput.value = data.catFood ?? "";
     discountCheckbox.checked = data.hasDiscount ?? false;
+    ticketValueInput.value = data.ticketValue ?? "150";
   }
   loadFromLocalStore();
 
@@ -768,6 +780,7 @@
         tickets: ticketsInput.valueAsNumber,
         catFood: catFoodInput.valueAsNumber || Infinity,
         hasDiscount: discountCheckbox.checked,
+        ticketValue: ticketValueInput.valueAsNumber,
       });
     saveToLocalStore();
     console.log(results);
