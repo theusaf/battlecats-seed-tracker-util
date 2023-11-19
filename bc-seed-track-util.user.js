@@ -473,19 +473,27 @@
         }
         yield [];
     }
-    function multiSearch(graph, start, { cats, tickets, catFood, hasDiscount, foundCatValue = ELEVEN_PULL_COST, }) {
-        const results = new Map();
+    function multiSearch(graph, start, { cats, tickets, catFood, hasDiscount, }) {
+        const results = new Map(), foundCatValues = [0, ELEVEN_PULL_COST, FIFTEEN_PULL_COST];
         for (const subset of subsets(cats)) {
             if (subset.length === 0)
                 continue;
-            const result = graphSearch(graph, start, {
-                cats: subset,
-                tickets,
-                catFood,
-                hasDiscount,
-                foundCatValue,
-            });
-            results.set(subset, result.get(subset.length)?.[0] ?? null);
+            for (const foundCatValue of foundCatValues) {
+                const result = graphSearch(graph, start, {
+                    cats: subset,
+                    tickets,
+                    catFood,
+                    hasDiscount,
+                    foundCatValue,
+                }), lengthResult = result.get(subset.length);
+                if (lengthResult) {
+                    results.set(subset, lengthResult[0] ?? null);
+                    break;
+                }
+                else {
+                    results.set(subset, null);
+                }
+            }
         }
         return results;
     }
@@ -651,7 +659,6 @@
                     tickets: ticketsInput.valueAsNumber,
                     catFood: catFoodInput.valueAsNumber || Infinity,
                     hasDiscount: discountCheckbox.checked,
-                    // foundCatValue: 0,
                 });
                 saveToLocalStore();
                 console.log(results);
